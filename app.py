@@ -16,7 +16,7 @@ CORS(app)
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 JSONBIN_BIN_ID = os.getenv("JSONBIN_BIN_ID", "6a421c9dda38895dfe0e83ae")
-JSONBIN_SECRET = os.getenv("JSONBIN_SECRET", "$2a$10$2ZIdpOIHAX8Ew24csDB3SOJBhQZFFBTvUzHmKIP6CzpLQ05vJCnne")
+JSONBIN_SECRET = os.getenv("JSONBIN_SECRET", "$2a$10$/YRpHMqXno3QxCe8t2iJquzHVY7i63FdhzY0OA3mtemlqwBc6iG.O")
 JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
 JSONBIN_HEADERS = {
     "X-Master-Key": JSONBIN_SECRET,
