@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import base64
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from groq import Groq
@@ -14,16 +15,26 @@ CORS(app)
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
+KNOWLEDGE_BASE_FILE = "knowledge_base.json"
+
+def load_kb():
+    if os.path.exists(KNOWLEDGE_BASE_FILE):
+        with open(KNOWLEDGE_BASE_FILE, "r") as f:
+            return json.load(f)
+    return {"items": []}
+
+def save_kb(kb):
+    with open(KNOWLEDGE_BASE_FILE, "w") as f:
+        json.dump(kb, f, indent=2)
+
 EDODWAJA_FACTS = """
-FACTS ABOUT EDODWAJA (use these when asked):
-- Edodwaja is a Hyderabad-based startup founded by Madhulash Babu Krovvidi
-- Madhulash Babu is a BTech Electronics graduate and Forbes 30 Under 30 Asia 2026 honoree
-- Edodwaja built India first AI-powered mobile laboratory called the FLOW Bus (Futuristic Lab on Wheels)
-- The FLOW Bus has reached over 60,000 students in rural areas across Telangana and Andhra Pradesh
-- The FLOW Bus is equipped with robotics, AR/VR, drone technology, 3D printing, holograms, and a mobile planetarium
-- The bus runs on solar power and accommodates 30-35 people at once
-- Edodwaja mission is making tech education accessible to students in government and rural schools
-- FLOW APP (FLOW LENS + FLOW TUTOR) are AI tools built by Edodwaja interns for the FLOW Bus experience
+FACTS ABOUT EDODWAJA:
+- Founded by Madhulash Babu Krovvidi
+- Built FLOW Bus — India first AI-powered mobile lab
+- Reached 60000+ students in Telangana and Andhra Pradesh
+- Madhulash Babu is Forbes 30 Under 30 Asia 2026 honoree
+- FLOW Bus has robotics, AR/VR, drones, 3D printing, holograms, planetarium
+- Runs on solar power, accommodates 30-35 students at once
 """
 
 def search_web(query):
@@ -40,12 +51,7 @@ def search_web(query):
     return ""
 
 def needs_search(question):
-    keywords = [
-        "who is", "what is", "founder", "ceo", "owner", "when was", "where is",
-        "how many", "latest", "recent", "news", "current", "price", "born",
-        "history", "invented", "discovered", "located", "population", "capital",
-        "president", "minister", "company", "startup", "profile", "about"
-    ]
+    keywords = ["who is","what is","founder","ceo","when was","where is","how many","latest","recent","news","current","born","history","invented","located","population","capital","president","minister","company","startup","about"]
     q = question.lower()
     return any(k in q for k in keywords)
 
@@ -73,6 +79,15 @@ def clean_and_parse(raw):
         pass
     return None
 
+def get_kb_context():
+    kb = load_kb()
+    if not kb["items"]:
+        return ""
+    context = "\n\nFLOW BUS COMPONENTS AND ROBOTS (use this when you recognise these items):\n"
+    for item in kb["items"]:
+        context += f"\n- {item['name']}: {item['description']}"
+    return context
+
 @app.route("/analyse", methods=["POST"])
 def analyse():
     try:
@@ -81,20 +96,25 @@ def analyse():
         if "," in image_data:
             image_data = image_data.split(",")[1]
 
-        prompt = """You are a powerful visual AI. Analyse EVERYTHING in this image completely.
+        kb_context = get_kb_context()
+
+        prompt = f"""You are a powerful visual AI for the EDODWAJA FLOW Bus.{kb_context}
+
+Analyse EVERYTHING in this image completely. If you recognise a FLOW Bus component or robot from the knowledge base above, use that information to give a detailed response.
+
 Return ONLY a valid JSON object. No text before or after. No markdown. No code blocks.
 
 For MATH, STATISTICS, AUTOMATA, DFA, NFA, PHYSICS, CHEMISTRY, any academic problems:
-{"mode":"math","title":"what type","solution":"solve every problem completely with full working and actual answers","steps":["Q1: complete solution","Q2: complete solution"],"concept":"subject and topic","tip":"study tip"}
+{{"mode":"math","title":"what type","solution":"solve every problem completely with full working and actual answers","steps":["Q1: complete solution","Q2: complete solution"],"concept":"subject and topic","tip":"study tip"}}
 
 For CODE or ERRORS:
-{"mode":"code","title":"language and problem","what_is_wrong":"explain bug clearly","fixed_code":"complete corrected code","explanation":"why fix works","tip":"best practice"}
+{{"mode":"code","title":"language and problem","what_is_wrong":"explain bug clearly","fixed_code":"complete corrected code","explanation":"why fix works","tip":"best practice"}}
 
 For CIRCUITS, ELECTRONICS, WIRING:
-{"mode":"circuit","title":"circuit name","what_it_does":"what it does","components":["part1","part2"],"wiring":"exact pin by pin connections with pin numbers","how_it_works":"how it works step by step","common_mistakes":"mistakes to avoid"}
+{{"mode":"circuit","title":"circuit name","what_it_does":"what it does","components":["part1","part2"],"wiring":"exact pin by pin connections with pin numbers","how_it_works":"how it works step by step","common_mistakes":"mistakes to avoid"}}
 
-For ANYTHING ELSE:
-{"mode":"object","object_name":"exact name","what_it_is":"2-3 sentences description","how_it_works":"how it works or functions","where_it_is_used":["use1","use2","use3","use4","use5"],"wiring_guide":null,"field":"field","difficulty_to_learn":"Easy / Moderate / Advanced","fun_fact":"fascinating fact","related_careers":["career1","career2","career3"]}
+For FLOW BUS COMPONENTS, ROBOTS, or ANY OTHER OBJECT:
+{{"mode":"object","object_name":"exact name","what_it_is":"detailed description — use knowledge base if available","how_it_works":"how it works or functions","where_it_is_used":["use1","use2","use3","use4","use5"],"wiring_guide":null,"field":"field","difficulty_to_learn":"Easy / Moderate / Advanced","fun_fact":"fascinating fact","related_careers":["career1","career2","career3"]}}
 
 IMPORTANT: Return ONLY the JSON. Nothing else."""
 
@@ -123,7 +143,7 @@ IMPORTANT: Return ONLY the JSON. Nothing else."""
                     "role": "user",
                     "content": [
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
-                        {"type": "text", "text": "Analyse everything in this image. Solve all problems with complete working. Use plain text only, no markdown, no asterisks. Number each question clearly."}
+                        {"type": "text", "text": "Analyse everything in this image. Use plain text only, no markdown."}
                     ]
                 }],
                 max_tokens=2000,
@@ -143,24 +163,12 @@ def lens_chat():
         messages = data.get("messages", [])
         image_data = data.get("image", None)
         language = data.get("language", "English")
+        kb_context = get_kb_context()
 
         system_prompt = f"""You are FLOW LENS AI by EDODWAJA. You can see images and answer any question.
 Reply ONLY in {language}.
-- If Telugu: use Telugu script
-- If Hindi: use Hindi script
-- If English: use simple English
-Be clear and helpful. For math show full working. For code show corrected version.
-For electronics give exact pin numbers. Use plain text only.
-
-
-FACTS ABOUT EDODWAJA:
-- Founded by Madhulash Babu Krovvidi
-- Built FLOW Bus — India first AI-powered mobile lab
-- Reached 60000+ students in Telangana and Andhra Pradesh
-- Madhulash Babu is Forbes 30 Under 30 Asia 2026 honoree
-- FLOW Bus has robotics, AR/VR, drones, 3D printing, holograms, planetarium
-- Runs on solar power, accommodates 30-35 students at once
-"""
+{EDODWAJA_FACTS}
+{kb_context}"""
 
         groq_messages = [{"role": "system", "content": system_prompt}]
         for i, msg in enumerate(messages):
@@ -207,25 +215,12 @@ def tutor_chat():
         if last_question and needs_search(last_question):
             web_context = search_web(last_question)
 
-        system_prompt = f"""You are a helpful AI assistant. Answer any question accurately and clearly.
+        system_prompt = f"""You are a helpful AI assistant. Answer any question accurately.
 Always reply ONLY in {language}.
-- If Telugu: reply in Telugu script
-- If Hindi: reply in Hindi script
-- If English: reply in simple English
-Never make up facts. Short answers for simple questions, detailed for complex ones.
-
-
-FACTS ABOUT EDODWAJA:
-- Founded by Madhulash Babu Krovvidi
-- Built FLOW Bus — India first AI-powered mobile lab
-- Reached 60000+ students in Telangana and Andhra Pradesh
-- Madhulash Babu is Forbes 30 Under 30 Asia 2026 honoree
-- FLOW Bus has robotics, AR/VR, drones, 3D printing, holograms, planetarium
-- Runs on solar power, accommodates 30-35 students at once
-"""
+{EDODWAJA_FACTS}"""
 
         if web_context:
-            system_prompt += f"\n\nWeb search results (use to answer accurately):\n{web_context}"
+            system_prompt += f"\n\nWeb search results:\n{web_context}"
 
         groq_messages = [{"role": "system", "content": system_prompt}]
         for msg in messages:
@@ -242,6 +237,53 @@ FACTS ABOUT EDODWAJA:
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ── ADMIN ROUTES ──
+
+@app.route("/admin/items", methods=["GET"])
+def get_items():
+    kb = load_kb()
+    items_without_image = []
+    for item in kb["items"]:
+        items_without_image.append({
+            "id": item["id"],
+            "name": item["name"],
+            "description": item["description"],
+            "has_image": bool(item.get("image"))
+        })
+    return jsonify(items_without_image)
+
+@app.route("/admin/add", methods=["POST"])
+def add_item():
+    try:
+        data = request.get_json()
+        kb = load_kb()
+        new_item = {
+            "id": len(kb["items"]) + 1,
+            "name": data.get("name", ""),
+            "description": data.get("description", ""),
+            "image": data.get("image", "")
+        }
+        kb["items"].append(new_item)
+        save_kb(kb)
+        return jsonify({"success": True, "id": new_item["id"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/admin/delete/<int:item_id>", methods=["DELETE"])
+def delete_item(item_id):
+    try:
+        kb = load_kb()
+        kb["items"] = [i for i in kb["items"] if i["id"] != item_id]
+        save_kb(kb)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/admin", methods=["GET"])
+def admin_panel():
+    from flask import send_file
+    return send_file("admin.html")
 
 @app.route("/", methods=["GET"])
 def health():

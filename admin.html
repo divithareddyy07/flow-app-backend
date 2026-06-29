@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FLOW APP Admin Panel</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #020817; color: white; font-family: 'Segoe UI', sans-serif; padding: 24px; }
+h1 { font-size: 28px; font-weight: 900; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
+.brand { font-size: 11px; color: #22c55e; font-weight: 800; letter-spacing: 0.25em; text-transform: uppercase; margin-bottom: 8px; }
+.subtitle { font-size: 14px; color: #64748b; margin-bottom: 32px; }
+.panel { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 24px; margin-bottom: 24px; max-width: 700px; }
+.panel h2 { font-size: 16px; font-weight: 700; color: #93c5fd; margin-bottom: 20px; }
+label { font-size: 12px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 6px; }
+input[type=text], textarea { width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 12px 16px; color: white; font-size: 14px; outline: none; margin-bottom: 16px; font-family: inherit; }
+textarea { height: 120px; resize: vertical; }
+.upload-area { border: 2px dashed #334155; border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; margin-bottom: 16px; background: #070f1f; }
+.upload-area:hover { border-color: #7c3aed; }
+.upload-area img { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 12px; }
+.btn-add { width: 100%; padding: 14px; background: linear-gradient(135deg, #16a34a, #15803d); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; }
+.btn-add:hover { opacity: 0.9; }
+.item-card { background: #070f1f; border: 1px solid #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.item-info h3 { font-size: 15px; font-weight: 700; color: #93c5fd; margin-bottom: 4px; }
+.item-info p { font-size: 13px; color: #64748b; line-height: 1.5; }
+.item-badge { font-size: 11px; background: #14532d; color: #86efac; padding: 2px 10px; border-radius: 999px; margin-top: 6px; display: inline-block; }
+.btn-delete { background: #7f1d1d; color: #fca5a5; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+.success { background: rgba(20,83,45,0.4); border: 1px solid #166534; border-radius: 10px; padding: 12px 16px; color: #86efac; font-size: 14px; margin-bottom: 16px; display: none; }
+.error { background: rgba(127,29,29,0.4); border: 1px solid #991b1b; border-radius: 10px; padding: 12px 16px; color: #fca5a5; font-size: 14px; margin-bottom: 16px; display: none; }
+.empty { text-align: center; color: #475569; padding: 32px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="brand">EDODWAJA</div>
+<h1>FLOW APP Admin Panel</h1>
+<p class="subtitle">Add FLOW Bus components and robots to the knowledge base</p>
+
+<div class="panel">
+  <h2>➕ Add New Item</h2>
+  <div id="success" class="success">✅ Item added successfully!</div>
+  <div id="error" class="error">❌ Error adding item.</div>
+
+  <label>Item Name</label>
+  <input type="text" id="name" placeholder="e.g. Humanoid Robot, 3D Printer, Drone" />
+
+  <label>Description</label>
+  <textarea id="description" placeholder="Describe this item in detail — what it is, how it works, what students should know about it, related careers..."></textarea>
+
+  <label>Photo</label>
+  <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+    <div id="uploadText">📷 Click to upload a photo of this item</div>
+    <img id="preview" style="display:none" />
+  </div>
+  <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(event)" />
+
+  <button class="btn-add" onclick="addItem()">💾 Save to Knowledge Base</button>
+</div>
+
+<div class="panel" style="max-width:700px">
+  <h2>📚 Knowledge Base (<span id="count">0</span> items)</h2>
+  <div id="itemsList"></div>
+</div>
+
+<script>
+const API = "https://flow-app-backend-x1iy.onrender.com";
+let imageBase64 = "";
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    imageBase64 = ev.target.result;
+    document.getElementById("preview").src = imageBase64;
+    document.getElementById("preview").style.display = "block";
+    document.getElementById("uploadText").textContent = "✅ Photo selected";
+  };
+  reader.readAsDataURL(file);
+}
+
+async function addItem() {
+  const name = document.getElementById("name").value.trim();
+  const description = document.getElementById("description").value.trim();
+
+  if (!name || !description) { alert("Please fill in name and description"); return; }
+  if (!imageBase64) { alert("Please upload a photo"); return; }
+
+  try {
+    const res = await fetch(`${API}/admin/add`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, description, image: imageBase64 })
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById("success").style.display = "block";
+      setTimeout(() => document.getElementById("success").style.display = "none", 3000);
+      document.getElementById("name").value = "";
+      document.getElementById("description").value = "";
+      document.getElementById("preview").style.display = "none";
+      document.getElementById("uploadText").textContent = "📷 Click to upload a photo of this item";
+      imageBase64 = "";
+      loadItems();
+    }
+  } catch(e) {
+    document.getElementById("error").style.display = "block";
+    setTimeout(() => document.getElementById("error").style.display = "none", 3000);
+  }
+}
+
+async function deleteItem(id) {
+  if (!confirm("Delete this item?")) return;
+  await fetch(`${API}/admin/delete/${id}`, { method: "DELETE" });
+  loadItems();
+}
+
+async function loadItems() {
+  try {
+    const res = await fetch(`${API}/admin/items`);
+    const items = await res.json();
+    document.getElementById("count").textContent = items.length;
+    const list = document.getElementById("itemsList");
+    if (items.length === 0) {
+      list.innerHTML = '<div class="empty">No items yet. Add your first FLOW Bus component above!</div>';
+      return;
+    }
+    list.innerHTML = items.map(item => `
+      <div class="item-card">
+        <div class="item-info">
+          <h3>${item.name}</h3>
+          <p>${item.description.substring(0, 150)}${item.description.length > 150 ? "..." : ""}</p>
+          ${item.has_image ? '<span class="item-badge">📷 Has photo</span>' : ''}
+        </div>
+        <button class="btn-delete" onclick="deleteItem(${item.id})">🗑 Delete</button>
+      </div>
+    `).join("");
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+loadItems();
+</script>
+</body>
+</html>
