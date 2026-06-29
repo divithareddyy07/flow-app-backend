@@ -345,6 +345,16 @@ def delete_item(item_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "flowbus2024")
+
+@app.route("/admin/login", methods=["POST"])
+def admin_login():
+    data = request.get_json()
+    if data.get("username") == ADMIN_USERNAME and data.get("password") == ADMIN_PASSWORD:
+        return jsonify({"success": True, "token": "flowbus_admin_token"})
+    return jsonify({"success": False, "message": "Invalid credentials"}), 401
+
 @app.route("/admin", methods=["GET"])
 def admin_panel():
     return send_file("admin.html")

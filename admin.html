@@ -6,65 +6,153 @@
 <title>FLOW APP Admin Panel</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #020817; color: white; font-family: 'Segoe UI', sans-serif; padding: 24px; }
-h1 { font-size: 28px; font-weight: 900; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
-.brand { font-size: 11px; color: #22c55e; font-weight: 800; letter-spacing: 0.25em; text-transform: uppercase; margin-bottom: 8px; }
-.subtitle { font-size: 14px; color: #64748b; margin-bottom: 32px; }
-.panel { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 24px; margin-bottom: 24px; max-width: 700px; }
+body { background: #020817; color: white; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+
+/* LOGIN */
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.login-card { background: #0f172a; border: 1px solid #1e293b; border-radius: 20px; padding: 40px; width: 100%; max-width: 400px; text-align: center; }
+.login-logo { font-size: 48px; margin-bottom: 16px; }
+.login-brand { font-size: 11px; color: #22c55e; font-weight: 800; letter-spacing: 0.25em; text-transform: uppercase; margin-bottom: 8px; }
+.login-title { font-size: 24px; font-weight: 900; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 4px; }
+.login-sub { font-size: 13px; color: #64748b; margin-bottom: 32px; }
+.login-input { width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 14px 18px; color: white; font-size: 15px; outline: none; margin-bottom: 14px; text-align: left; }
+.login-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #2563eb, #7c3aed); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 8px; }
+.login-error { background: rgba(127,29,29,0.4); border: 1px solid #991b1b; border-radius: 10px; padding: 12px; color: #fca5a5; font-size: 14px; margin-top: 14px; display: none; }
+
+/* ADMIN PANEL */
+.admin-wrap { display: none; }
+.header { background: #0f172a; border-bottom: 1px solid #1e293b; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-brand { font-size: 11px; color: #22c55e; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; }
+.header-title { font-size: 20px; font-weight: 800; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.logout-btn { background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 8px 16px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.content { padding: 24px; max-width: 760px; margin: 0 auto; }
+.panel { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 24px; margin-bottom: 24px; }
 .panel h2 { font-size: 16px; font-weight: 700; color: #93c5fd; margin-bottom: 20px; }
 label { font-size: 12px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 6px; }
 input[type=text], textarea { width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 12px 16px; color: white; font-size: 14px; outline: none; margin-bottom: 16px; font-family: inherit; }
 textarea { height: 120px; resize: vertical; }
-.upload-area { border: 2px dashed #334155; border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; margin-bottom: 16px; background: #070f1f; }
+.upload-area { border: 2px dashed #334155; border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; margin-bottom: 16px; background: #070f1f; transition: border-color 0.2s; }
 .upload-area:hover { border-color: #7c3aed; }
-.upload-area img { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 12px; }
+.preview-img { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 12px; display: none; }
 .btn-add { width: 100%; padding: 14px; background: linear-gradient(135deg, #16a34a, #15803d); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; }
-.btn-add:hover { opacity: 0.9; }
 .item-card { background: #070f1f; border: 1px solid #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.item-thumb { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; flex-shrink: 0; border: 1px solid #334155; }
+.item-thumb-placeholder { width: 60px; height: 60px; border-radius: 8px; background: #1e293b; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+.item-info { flex: 1; }
 .item-info h3 { font-size: 15px; font-weight: 700; color: #93c5fd; margin-bottom: 4px; }
 .item-info p { font-size: 13px; color: #64748b; line-height: 1.5; }
 .item-badge { font-size: 11px; background: #14532d; color: #86efac; padding: 2px 10px; border-radius: 999px; margin-top: 6px; display: inline-block; }
 .btn-delete { background: #7f1d1d; color: #fca5a5; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 13px; font-weight: 600; flex-shrink: 0; }
-.success { background: rgba(20,83,45,0.4); border: 1px solid #166534; border-radius: 10px; padding: 12px 16px; color: #86efac; font-size: 14px; margin-bottom: 16px; display: none; }
-.error { background: rgba(127,29,29,0.4); border: 1px solid #991b1b; border-radius: 10px; padding: 12px 16px; color: #fca5a5; font-size: 14px; margin-bottom: 16px; display: none; }
+.alert { border-radius: 10px; padding: 12px 16px; font-size: 14px; margin-bottom: 16px; display: none; }
+.alert-success { background: rgba(20,83,45,0.4); border: 1px solid #166534; color: #86efac; }
+.alert-error { background: rgba(127,29,29,0.4); border: 1px solid #991b1b; color: #fca5a5; }
 .empty { text-align: center; color: #475569; padding: 32px; font-size: 14px; }
+.count-badge { background: #1e3a5f; color: #93c5fd; font-size: 12px; padding: 2px 10px; border-radius: 999px; margin-left: 8px; }
 </style>
 </head>
 <body>
 
-<div class="brand">EDODWAJA</div>
-<h1>FLOW APP Admin Panel</h1>
-<p class="subtitle">Add FLOW Bus components and robots to the knowledge base</p>
-
-<div class="panel">
-  <h2>➕ Add New Item</h2>
-  <div id="success" class="success">✅ Item added successfully!</div>
-  <div id="error" class="error">❌ Error adding item.</div>
-
-  <label>Item Name</label>
-  <input type="text" id="name" placeholder="e.g. Humanoid Robot, 3D Printer, Drone" />
-
-  <label>Description</label>
-  <textarea id="description" placeholder="Describe this item in detail — what it is, how it works, what students should know about it, related careers..."></textarea>
-
-  <label>Photo</label>
-  <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-    <div id="uploadText">📷 Click to upload a photo of this item</div>
-    <img id="preview" style="display:none" />
+<!-- LOGIN SCREEN -->
+<div class="login-wrap" id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">🚌</div>
+    <div class="login-brand">EDODWAJA</div>
+    <h1 class="login-title">FLOW APP Admin</h1>
+    <p class="login-sub">Sign in to manage the knowledge base</p>
+    <input type="text" class="login-input" id="username" placeholder="Username" />
+    <input type="password" class="login-input" id="password" placeholder="Password" onkeydown="if(event.key==='Enter') login()" />
+    <button class="login-btn" onclick="login()">🔐 Sign In</button>
+    <div class="login-error" id="loginError">Invalid username or password</div>
   </div>
-  <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(event)" />
-
-  <button class="btn-add" onclick="addItem()">💾 Save to Knowledge Base</button>
 </div>
 
-<div class="panel" style="max-width:700px">
-  <h2>📚 Knowledge Base (<span id="count">0</span> items)</h2>
-  <div id="itemsList"></div>
+<!-- ADMIN PANEL -->
+<div class="admin-wrap" id="adminPanel">
+  <div class="header">
+    <div class="header-left">
+      <span style="font-size:24px">🚌</span>
+      <div>
+        <div class="header-brand">EDODWAJA</div>
+        <div class="header-title">FLOW APP Admin</div>
+      </div>
+    </div>
+    <button class="logout-btn" onclick="logout()">🚪 Logout</button>
+  </div>
+
+  <div class="content">
+    <div class="panel">
+      <h2>➕ Add New Item</h2>
+      <div class="alert alert-success" id="successAlert">✅ Item saved to knowledge base!</div>
+      <div class="alert alert-error" id="errorAlert">❌ Error saving item. Try again.</div>
+
+      <label>Item Name</label>
+      <input type="text" id="itemName" placeholder="e.g. Humanoid Robot, 3D Printer, Arduino Board" />
+
+      <label>Description (detailed — this is what students will see)</label>
+      <textarea id="itemDesc" placeholder="Describe this item in detail — what it is, how it works, key features, what students should know..."></textarea>
+
+      <label>Photo</label>
+      <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <div id="uploadText" style="color:#475569; font-size:14px">📷 Click to upload a reference photo of this item</div>
+        <img id="previewImg" class="preview-img" />
+      </div>
+      <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(event)" />
+
+      <button class="btn-add" onclick="addItem()">💾 Save to Knowledge Base</button>
+    </div>
+
+    <div class="panel">
+      <h2>📚 Knowledge Base <span class="count-badge" id="countBadge">0 items</span></h2>
+      <div id="itemsList"><div class="empty">Loading...</div></div>
+    </div>
+  </div>
 </div>
 
 <script>
 const API = "https://flow-app-backend-x1iy.onrender.com";
 let imageBase64 = "";
+let authToken = localStorage.getItem("flow_admin_token");
+
+if (authToken) showAdmin();
+
+async function login() {
+  const username = document.getElementById("username").value.trim();
+  const password = document.getElementById("password").value.trim();
+  if (!username || !password) return;
+
+  try {
+    const res = await fetch(`${API}/admin/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (data.success) {
+      authToken = data.token;
+      localStorage.setItem("flow_admin_token", authToken);
+      showAdmin();
+    } else {
+      document.getElementById("loginError").style.display = "block";
+    }
+  } catch(e) {
+    document.getElementById("loginError").style.display = "block";
+    document.getElementById("loginError").textContent = "Could not connect to server.";
+  }
+}
+
+function showAdmin() {
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("adminPanel").style.display = "block";
+  loadItems();
+}
+
+function logout() {
+  localStorage.removeItem("flow_admin_token");
+  authToken = null;
+  document.getElementById("loginScreen").style.display = "flex";
+  document.getElementById("adminPanel").style.display = "none";
+}
 
 function handleFile(e) {
   const file = e.target.files[0];
@@ -72,18 +160,19 @@ function handleFile(e) {
   const reader = new FileReader();
   reader.onload = (ev) => {
     imageBase64 = ev.target.result;
-    document.getElementById("preview").src = imageBase64;
-    document.getElementById("preview").style.display = "block";
-    document.getElementById("uploadText").textContent = "✅ Photo selected";
+    document.getElementById("previewImg").src = imageBase64;
+    document.getElementById("previewImg").style.display = "block";
+    document.getElementById("uploadText").textContent = "✅ Photo selected — click to change";
   };
   reader.readAsDataURL(file);
 }
 
 async function addItem() {
-  const name = document.getElementById("name").value.trim();
-  const description = document.getElementById("description").value.trim();
+  const name = document.getElementById("itemName").value.trim();
+  const description = document.getElementById("itemDesc").value.trim();
 
-  if (!name || !description) { alert("Please fill in name and description"); return; }
+  if (!name) { alert("Please enter a name"); return; }
+  if (!description) { alert("Please enter a description"); return; }
   if (!imageBase64) { alert("Please upload a photo"); return; }
 
   try {
@@ -94,32 +183,42 @@ async function addItem() {
     });
     const data = await res.json();
     if (data.success) {
-      document.getElementById("success").style.display = "block";
-      setTimeout(() => document.getElementById("success").style.display = "none", 3000);
-      document.getElementById("name").value = "";
-      document.getElementById("description").value = "";
-      document.getElementById("preview").style.display = "none";
-      document.getElementById("uploadText").textContent = "📷 Click to upload a photo of this item";
+      showAlert("successAlert");
+      document.getElementById("itemName").value = "";
+      document.getElementById("itemDesc").value = "";
+      document.getElementById("previewImg").style.display = "none";
+      document.getElementById("uploadText").textContent = "📷 Click to upload a reference photo of this item";
       imageBase64 = "";
       loadItems();
+    } else {
+      showAlert("errorAlert");
     }
   } catch(e) {
-    document.getElementById("error").style.display = "block";
-    setTimeout(() => document.getElementById("error").style.display = "none", 3000);
+    showAlert("errorAlert");
   }
 }
 
+function showAlert(id) {
+  const el = document.getElementById(id);
+  el.style.display = "block";
+  setTimeout(() => el.style.display = "none", 3000);
+}
+
 async function deleteItem(id) {
-  if (!confirm("Delete this item?")) return;
-  await fetch(`${API}/admin/delete/${id}`, { method: "DELETE" });
-  loadItems();
+  if (!confirm("Delete this item from the knowledge base?")) return;
+  try {
+    await fetch(`${API}/admin/delete/${id}`, { method: "DELETE" });
+    loadItems();
+  } catch(e) {
+    alert("Error deleting item");
+  }
 }
 
 async function loadItems() {
   try {
     const res = await fetch(`${API}/admin/items`);
     const items = await res.json();
-    document.getElementById("count").textContent = items.length;
+    document.getElementById("countBadge").textContent = `${items.length} item${items.length !== 1 ? "s" : ""}`;
     const list = document.getElementById("itemsList");
     if (items.length === 0) {
       list.innerHTML = '<div class="empty">No items yet. Add your first FLOW Bus component above!</div>';
@@ -127,20 +226,22 @@ async function loadItems() {
     }
     list.innerHTML = items.map(item => `
       <div class="item-card">
+        ${item.has_image
+          ? `<img class="item-thumb" src="${API}/admin/image/${item.id}" onerror="this.style.display='none'" />`
+          : `<div class="item-thumb-placeholder">📦</div>`
+        }
         <div class="item-info">
           <h3>${item.name}</h3>
-          <p>${item.description.substring(0, 150)}${item.description.length > 150 ? "..." : ""}</p>
+          <p>${item.description.substring(0, 120)}${item.description.length > 120 ? "..." : ""}</p>
           ${item.has_image ? '<span class="item-badge">📷 Has photo</span>' : ''}
         </div>
         <button class="btn-delete" onclick="deleteItem(${item.id})">🗑 Delete</button>
       </div>
     `).join("");
   } catch(e) {
-    console.error(e);
+    document.getElementById("itemsList").innerHTML = '<div class="empty">Error loading items. Make sure server is running.</div>';
   }
 }
-
-loadItems();
 </script>
 </body>
 </html>
