@@ -1,8 +1,8 @@
 import os
 import re
 import json
-import base64
-from flask import Flask, request, jsonify
+import requests
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from groq import Groq
 from dotenv import load_dotenv
@@ -15,22 +15,31 @@ CORS(app)
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-KNOWLEDGE_BASE_FILE = "knowledge_base.json"
+JSONBIN_BIN_ID = os.getenv("JSONBIN_BIN_ID", "6a421c9dda38895dfe0e83ae")
+JSONBIN_SECRET = os.getenv("JSONBIN_SECRET", "$2a$10$2ZIdpOIHAX8Ew24csDB3SOJBhQZFFBTvUzHmKIP6CzpLQ05vJCnne")
+JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
+JSONBIN_HEADERS = {
+    "X-Master-Key": JSONBIN_SECRET,
+    "Content-Type": "application/json"
+}
 
 def load_kb():
-    if os.path.exists(KNOWLEDGE_BASE_FILE):
-        with open(KNOWLEDGE_BASE_FILE, "r") as f:
-            return json.load(f)
-    return {"items": []}
+    try:
+        res = requests.get(JSONBIN_URL, headers=JSONBIN_HEADERS)
+        return res.json().get("record", {"items": []})
+    except:
+        return {"items": []}
 
 def save_kb(kb):
-    with open(KNOWLEDGE_BASE_FILE, "w") as f:
-        json.dump(kb, f, indent=2)
+    try:
+        requests.put(JSONBIN_URL, headers=JSONBIN_HEADERS, json=kb)
+    except:
+        pass
 
 EDODWAJA_FACTS = """
 FACTS ABOUT EDODWAJA:
 - Founded by Madhulash Babu Krovvidi
-- Built FLOW Bus — India first AI-powered mobile lab
+- Built FLOW Bus - India first AI-powered mobile lab
 - Reached 60000+ students in Telangana and Andhra Pradesh
 - Madhulash Babu is Forbes 30 Under 30 Asia 2026 honoree
 - FLOW Bus has robotics, AR/VR, drones, 3D printing, holograms, planetarium
@@ -81,7 +90,7 @@ def clean_and_parse(raw):
 
 def get_kb_context():
     kb = load_kb()
-    if not kb["items"]:
+    if not kb.get("items"):
         return ""
     context = "\n\nFLOW BUS COMPONENTS AND ROBOTS (use this when you recognise these items):\n"
     for item in kb["items"]:
@@ -100,7 +109,7 @@ def analyse():
 
         prompt = f"""You are a powerful visual AI for the EDODWAJA FLOW Bus.{kb_context}
 
-Analyse EVERYTHING in this image completely. If you recognise a FLOW Bus component or robot from the knowledge base above, use that information to give a detailed response.
+Analyse EVERYTHING in this image. If you recognise a FLOW Bus component or robot from the knowledge base above, use that information to give a detailed response.
 
 Return ONLY a valid JSON object. No text before or after. No markdown. No code blocks.
 
@@ -114,7 +123,7 @@ For CIRCUITS, ELECTRONICS, WIRING:
 {{"mode":"circuit","title":"circuit name","what_it_does":"what it does","components":["part1","part2"],"wiring":"exact pin by pin connections with pin numbers","how_it_works":"how it works step by step","common_mistakes":"mistakes to avoid"}}
 
 For FLOW BUS COMPONENTS, ROBOTS, or ANY OTHER OBJECT:
-{{"mode":"object","object_name":"exact name","what_it_is":"detailed description — use knowledge base if available","how_it_works":"how it works or functions","where_it_is_used":["use1","use2","use3","use4","use5"],"wiring_guide":null,"field":"field","difficulty_to_learn":"Easy / Moderate / Advanced","fun_fact":"fascinating fact","related_careers":["career1","career2","career3"]}}
+{{"mode":"object","object_name":"exact name","what_it_is":"detailed description - use knowledge base if available","how_it_works":"how it works or functions","where_it_is_used":["use1","use2","use3","use4","use5"],"wiring_guide":null,"field":"field","difficulty_to_learn":"Easy / Moderate / Advanced","fun_fact":"fascinating fact","related_careers":["career1","career2","career3"]}}
 
 IMPORTANT: Return ONLY the JSON. Nothing else."""
 
@@ -238,13 +247,11 @@ Always reply ONLY in {language}.
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ── ADMIN ROUTES ──
-
 @app.route("/admin/items", methods=["GET"])
 def get_items():
     kb = load_kb()
     items_without_image = []
-    for item in kb["items"]:
+    for item in kb.get("items", []):
         items_without_image.append({
             "id": item["id"],
             "name": item["name"],
@@ -258,15 +265,18 @@ def add_item():
     try:
         data = request.get_json()
         kb = load_kb()
+        items = kb.get("items", [])
+        new_id = max([i["id"] for i in items], default=0) + 1
         new_item = {
-            "id": len(kb["items"]) + 1,
+            "id": new_id,
             "name": data.get("name", ""),
             "description": data.get("description", ""),
             "image": data.get("image", "")
         }
-        kb["items"].append(new_item)
+        items.append(new_item)
+        kb["items"] = items
         save_kb(kb)
-        return jsonify({"success": True, "id": new_item["id"]})
+        return jsonify({"success": True, "id": new_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -274,7 +284,7 @@ def add_item():
 def delete_item(item_id):
     try:
         kb = load_kb()
-        kb["items"] = [i for i in kb["items"] if i["id"] != item_id]
+        kb["items"] = [i for i in kb.get("items", []) if i["id"] != item_id]
         save_kb(kb)
         return jsonify({"success": True})
     except Exception as e:
@@ -282,7 +292,6 @@ def delete_item(item_id):
 
 @app.route("/admin", methods=["GET"])
 def admin_panel():
-    from flask import send_file
     return send_file("admin.html")
 
 @app.route("/", methods=["GET"])
