@@ -92,10 +92,49 @@ def get_kb_context():
     kb = load_kb()
     if not kb.get("items"):
         return ""
-    context = "\n\nFLOW BUS COMPONENTS AND ROBOTS (use this when you recognise these items):\n"
+    context = "\n\nFLOW BUS KNOWLEDGE BASE - These are items in the FLOW Bus. When you see any of these in the image, use the provided description:\n"
     for item in kb["items"]:
-        context += f"\n- {item['name']}: {item['description']}"
+        context += f"\nITEM: {item['name']}\nDESCRIPTION: {item['description']}\n"
     return context
+
+def find_matching_kb_item(image_b64):
+    kb = load_kb()
+    items = kb.get("items", [])
+    if not items:
+        return None
+    
+    items_text = ""
+    for item in items:
+        items_text += f"- ID:{item['id']} NAME:{item['name']}\n"
+    
+    try:
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+                    {"type": "text", "text": f"""Look at this image carefully. Does it match any of these items?
+
+{items_text}
+
+If the image matches one of these items, reply with ONLY the ID number like: MATCH:1
+If no match found, reply with: MATCH:0"""}
+                ]
+            }],
+            max_tokens=50,
+            temperature=0.1
+        )
+        result = response.choices[0].message.content.strip()
+        if "MATCH:" in result:
+            match_id = int(result.split("MATCH:")[1].strip())
+            if match_id > 0:
+                for item in items:
+                    if item["id"] == match_id:
+                        return item
+    except:
+        pass
+    return None
 
 @app.route("/analyse", methods=["POST"])
 def analyse():
@@ -106,6 +145,22 @@ def analyse():
             image_data = image_data.split(",")[1]
 
         kb_context = get_kb_context()
+
+        # Check if image matches any knowledge base item
+        matched_item = find_matching_kb_item(image_data)
+        if matched_item:
+            return jsonify({
+                "mode": "object",
+                "object_name": matched_item["name"],
+                "what_it_is": matched_item["description"],
+                "how_it_works": matched_item["description"],
+                "where_it_is_used": ["FLOW Bus", "Educational demonstrations", "Student learning", "Technology exhibitions", "Hands-on workshops"],
+                "wiring_guide": None,
+                "field": "Educational Technology",
+                "difficulty_to_learn": "Moderate",
+                "fun_fact": f"This is part of the FLOW Bus — India's first AI-powered mobile laboratory!",
+                "related_careers": ["Robotics Engineer", "AI Developer", "Technology Educator"]
+            })
 
         prompt = f"""You are a powerful visual AI for the EDODWAJA FLOW Bus.{kb_context}
 
