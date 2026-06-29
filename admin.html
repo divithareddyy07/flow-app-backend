@@ -242,6 +242,27 @@ async function loadItems() {
     document.getElementById("itemsList").innerHTML = '<div class="empty">Error loading items. Make sure server is running.</div>';
   }
 }
+
+async function changePassword() {
+  const newUsername = document.getElementById("newUsername").value.trim();
+  const newPassword = document.getElementById("newPassword").value.trim();
+  if (!newUsername || !newPassword) { alert("Please fill both fields"); return; }
+  try {
+    const res = await fetch(`${API}/admin/change-credentials`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: newUsername, password: newPassword, token: authToken })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showAlert("pwSuccess");
+      document.getElementById("newUsername").value = "";
+      document.getElementById("newPassword").value = "";
+    } else {
+      showAlert("pwError");
+    }
+  } catch(e) { showAlert("pwError"); }
+}
 </script>
 </body>
 </html>

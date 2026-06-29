@@ -348,10 +348,29 @@ def delete_item(item_id):
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "flowbus2024")
 
+# Store credentials in memory (persists until Render restarts)
+current_credentials = {"username": None, "password": None}
+
+def get_credentials():
+    return (
+        current_credentials["username"] or os.getenv("ADMIN_USERNAME", "admin"),
+        current_credentials["password"] or os.getenv("ADMIN_PASSWORD", "flowbus2024")
+    )
+
+@app.route("/admin/change-credentials", methods=["POST"])
+def change_credentials():
+    data = request.get_json()
+    if data.get("token") != "flowbus_admin_token":
+        return jsonify({"success": False}), 401
+    current_credentials["username"] = data.get("username")
+    current_credentials["password"] = data.get("password")
+    return jsonify({"success": True})
+
 @app.route("/admin/login", methods=["POST"])
 def admin_login():
     data = request.get_json()
-    if data.get("username") == ADMIN_USERNAME and data.get("password") == ADMIN_PASSWORD:
+    uname, pwd = get_credentials()
+    if data.get("username") == uname and data.get("password") == pwd:
         return jsonify({"success": True, "token": "flowbus_admin_token"})
     return jsonify({"success": False, "message": "Invalid credentials"}), 401
 
