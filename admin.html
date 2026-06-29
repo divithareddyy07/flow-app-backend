@@ -226,10 +226,7 @@ async function loadItems() {
     }
     list.innerHTML = items.map(item => `
       <div class="item-card">
-        ${item.has_image
-          ? `<img class="item-thumb" src="${API}/admin/image/${item.id}" onerror="this.style.display='none'" />`
-          : `<div class="item-thumb-placeholder">📦</div>`
-        }
+        <div class="item-thumb-placeholder">${item.has_image ? "📷" : "📦"}</div>
         <div class="item-info">
           <h3>${item.name}</h3>
           <p>${item.description.substring(0, 120)}${item.description.length > 120 ? "..." : ""}</p>
