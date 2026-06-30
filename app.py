@@ -108,25 +108,32 @@ def find_matching_kb_item(image_b64):
     if not items:
         return None
 
-    items_text = "\n".join([f"ID:{item['id']} NAME:{item['name']}" for item in items])
+    # Build content with BOTH the student photo AND all reference photos
+    content_blocks = [
+        {"type": "text", "text": "This is the PHOTO TO IDENTIFY (taken by a student):"},
+        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+        {"type": "text", "text": "\nNow here are the REFERENCE ITEMS in the knowledge base. Compare the photo above to each one:"}
+    ]
+
+    valid_items = []
+    for item in items:
+        if item.get("image_url"):
+            content_blocks.append({"type": "text", "text": f"\nReference ID:{item['id']} NAME:{item['name']}"})
+            content_blocks.append({"type": "image_url", "image_url": {"url": item["image_url"]}})
+            valid_items.append(item)
+
+    if not valid_items:
+        return None
+
+    content_blocks.append({
+        "type": "text",
+        "text": "\n\nWhich reference ID visually matches the photo to identify? They must be the same physical object (same colors, shape, build), not just similar category. Reply ONLY with: MATCH:ID or MATCH:0 if none match."
+    })
 
     try:
         response = client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
-                    {"type": "text", "text": f"""Look at this image very carefully — note its specific visual details, colors, shape, components.
-
-I have these reference items in my knowledge base:
-{items_text}
-
-Does this image visually match any of these items? Only say MATCH if you are confident it's the same physical object/robot, not just a similar category.
-
-Reply ONLY with: MATCH:ID or MATCH:0"""}
-                ]
-            }],
+            messages=[{"role": "user", "content": content_blocks}],
             max_tokens=20,
             temperature=0.0
         )
@@ -135,7 +142,7 @@ Reply ONLY with: MATCH:ID or MATCH:0"""}
             try:
                 match_id = int(result.split("MATCH:")[1].strip().split()[0])
                 if match_id > 0:
-                    for item in items:
+                    for item in valid_items:
                         if item["id"] == match_id:
                             return item
             except:
