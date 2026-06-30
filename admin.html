@@ -226,11 +226,14 @@ async function loadItems() {
     }
     list.innerHTML = items.map(item => `
       <div class="item-card">
-        <div class="item-thumb-placeholder">${item.has_image ? "📷" : "📦"}</div>
+        ${item.image_url
+          ? `<img class="item-thumb" src="${item.image_url}" />`
+          : `<div class="item-thumb-placeholder">📦</div>`
+        }
         <div class="item-info">
           <h3>${item.name}</h3>
           <p>${item.description.substring(0, 120)}${item.description.length > 120 ? "..." : ""}</p>
-          ${item.has_image ? '<span class="item-badge">📷 Has photo</span>' : ''}
+          ${item.image_url ? '<span class="item-badge">📷 Has photo</span>' : ''}
         </div>
         <button class="btn-delete" onclick="deleteItem(${item.id})">🗑 Delete</button>
       </div>

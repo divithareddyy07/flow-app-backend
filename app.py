@@ -1,12 +1,14 @@
 import os
 import re
 import json
-import requests
+import base64
+import uuid
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from groq import Groq
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
+from supabase import create_client, Client
 
 load_dotenv()
 
@@ -15,26 +17,17 @@ CORS(app)
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-JSONBIN_BIN_ID = os.getenv("JSONBIN_BIN_ID", "6a421c9dda38895dfe0e83ae")
-JSONBIN_SECRET = os.getenv("JSONBIN_SECRET", "$2a$10$/YRpHMqXno3QxCe8t2iJquzHVY7i63FdhzY0OA3mtemlqwBc6iG.O")
-JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
-JSONBIN_HEADERS = {
-    "X-Master-Key": JSONBIN_SECRET,
-    "Content-Type": "application/json"
-}
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://vrexvfqubmpfxkwsadxm.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyZXh2ZnF1Ym1wZnhrd3NhZHhtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Mjc5MzQ5NiwiZXhwIjoyMDk4MzY5NDk2fQ.SfYXfkRb1KsHSFP5uwUTFMN5zXlwjWa-y860jHsi51w")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def load_kb():
-    try:
-        res = requests.get(JSONBIN_URL, headers=JSONBIN_HEADERS)
-        return res.json().get("record", {"items": []})
-    except:
-        return {"items": []}
+current_credentials = {"username": None, "password": None}
 
-def save_kb(kb):
-    try:
-        requests.put(JSONBIN_URL, headers=JSONBIN_HEADERS, json=kb)
-    except:
-        pass
+def get_credentials():
+    return (
+        current_credentials["username"] or os.getenv("ADMIN_USERNAME", "admin"),
+        current_credentials["password"] or os.getenv("ADMIN_PASSWORD", "flowbus2024")
+    )
 
 EDODWAJA_FACTS = """
 FACTS ABOUT EDODWAJA:
@@ -88,25 +81,35 @@ def clean_and_parse(raw):
         pass
     return None
 
-def get_kb_context():
-    kb = load_kb()
-    if not kb.get("items"):
-        return ""
-    context = "\n\nFLOW BUS KNOWLEDGE BASE - These are items in the FLOW Bus. When you see any of these in the image, use the provided description:\n"
-    for item in kb["items"]:
-        context += f"\nITEM: {item['name']}\nDESCRIPTION: {item['description']}\n"
-    return context
+# ── KNOWLEDGE BASE (Supabase) ──
+
+def get_all_kb_items():
+    try:
+        result = supabase.table("knowledge_base").select("*").execute()
+        return result.data
+    except Exception as e:
+        print(f"Supabase fetch error: {e}")
+        return []
+
+def upload_image_to_storage(image_b64, filename):
+    try:
+        image_bytes = base64.b64decode(image_b64)
+        supabase.storage.from_("flow-images").upload(
+            filename, image_bytes, {"content-type": "image/jpeg"}
+        )
+        public_url = supabase.storage.from_("flow-images").get_public_url(filename)
+        return public_url
+    except Exception as e:
+        print(f"Image upload error: {e}")
+        return None
 
 def find_matching_kb_item(image_b64):
-    kb = load_kb()
-    items = kb.get("items", [])
+    items = get_all_kb_items()
     if not items:
         return None
-    
-    items_text = ""
-    for item in items:
-        items_text += f"- ID:{item['id']} NAME:{item['name']}\n"
-    
+
+    items_text = "\n".join([f"ID:{item['id']} NAME:{item['name']}" for item in items])
+
     try:
         response = client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
@@ -114,58 +117,79 @@ def find_matching_kb_item(image_b64):
                 "role": "user",
                 "content": [
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
-                    {"type": "text", "text": f"""Look at this image carefully. Does it match any of these items?
+                    {"type": "text", "text": f"""Look at this image very carefully — note its specific visual details, colors, shape, components.
 
+I have these reference items in my knowledge base:
 {items_text}
 
-If the image matches one of these items, reply with ONLY the ID number like: MATCH:1
-If no match found, reply with: MATCH:0"""}
+Does this image visually match any of these items? Only say MATCH if you are confident it's the same physical object/robot, not just a similar category.
+
+Reply ONLY with: MATCH:ID or MATCH:0"""}
                 ]
             }],
-            max_tokens=50,
-            temperature=0.1
+            max_tokens=20,
+            temperature=0.0
         )
         result = response.choices[0].message.content.strip()
         if "MATCH:" in result:
-            match_id = int(result.split("MATCH:")[1].strip())
-            if match_id > 0:
-                for item in items:
-                    if item["id"] == match_id:
-                        return item
-    except:
-        pass
+            try:
+                match_id = int(result.split("MATCH:")[1].strip().split()[0])
+                if match_id > 0:
+                    for item in items:
+                        if item["id"] == match_id:
+                            return item
+            except:
+                pass
+    except Exception as e:
+        print(f"Matching error: {e}")
     return None
 
-@app.route("/analyse", methods=["POST"])
-def analyse():
+def generate_full_description(name, description):
+    """Use AI to expand a basic description into the full FLOW LENS object format"""
     try:
-        data = request.get_json()
-        image_data = data.get("image", "")
-        if "," in image_data:
-            image_data = image_data.split(",")[1]
+        prompt = f"""Based on this item information:
+Name: {name}
+Description: {description}
 
-        kb_context = get_kb_context()
+Generate a complete educational profile. Return ONLY valid JSON:
+{{
+  "what_it_is": "2-3 sentence expanded description based on the given info",
+  "how_it_works": "explain how it works based on the description, 3-4 sentences",
+  "where_it_is_used": ["use case 1", "use case 2", "use case 3", "use case 4", "use case 5"],
+  "field": "relevant field or domain",
+  "difficulty_to_learn": "Easy or Moderate or Advanced",
+  "fun_fact": "an interesting fact related to this item",
+  "related_careers": ["career1", "career2", "career3"]
+}}
 
-        # Check if image matches any knowledge base item
-        matched_item = find_matching_kb_item(image_data)
-        if matched_item:
-            return jsonify({
-                "mode": "object",
-                "object_name": matched_item["name"],
-                "what_it_is": matched_item["description"],
-                "how_it_works": matched_item["description"],
-                "where_it_is_used": ["FLOW Bus", "Educational demonstrations", "Student learning", "Technology exhibitions", "Hands-on workshops"],
-                "wiring_guide": None,
-                "field": "Educational Technology",
-                "difficulty_to_learn": "Moderate",
-                "fun_fact": f"This is part of the FLOW Bus — India's first AI-powered mobile laboratory!",
-                "related_careers": ["Robotics Engineer", "AI Developer", "Technology Educator"]
-            })
+Return ONLY the JSON."""
 
-        prompt = f"""You are a powerful visual AI for the EDODWAJA FLOW Bus.{kb_context}
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=800,
+            temperature=0.3
+        )
+        raw = response.choices[0].message.content.strip()
+        result = clean_and_parse(raw)
+        return result
+    except Exception as e:
+        print(f"Description generation error: {e}")
+        return None
 
-Analyse EVERYTHING in this image. If you recognise a FLOW Bus component or robot from the knowledge base above, use that information to give a detailed response.
+def get_kb_context():
+    items = get_all_kb_items()
+    if not items:
+        return ""
+    context = "\n\nFLOW BUS KNOWLEDGE BASE:\n"
+    for item in items:
+        context += f"- {item['name']}: {item['description']}\n"
+    return context
 
+def analyse_with_ai(image_b64, kb_context=""):
+    prompt = f"""You are a powerful visual AI for the EDODWAJA FLOW Bus.{kb_context}
+
+Analyse EVERYTHING in this image completely.
 Return ONLY a valid JSON object. No text before or after. No markdown. No code blocks.
 
 For MATH, STATISTICS, AUTOMATA, DFA, NFA, PHYSICS, CHEMISTRY, any academic problems:
@@ -177,31 +201,74 @@ For CODE or ERRORS:
 For CIRCUITS, ELECTRONICS, WIRING:
 {{"mode":"circuit","title":"circuit name","what_it_does":"what it does","components":["part1","part2"],"wiring":"exact pin by pin connections with pin numbers","how_it_works":"how it works step by step","common_mistakes":"mistakes to avoid"}}
 
-For FLOW BUS COMPONENTS, ROBOTS, or ANY OTHER OBJECT:
-{{"mode":"object","object_name":"exact name","what_it_is":"detailed description - use knowledge base if available","how_it_works":"how it works or functions","where_it_is_used":["use1","use2","use3","use4","use5"],"wiring_guide":null,"field":"field","difficulty_to_learn":"Easy / Moderate / Advanced","fun_fact":"fascinating fact","related_careers":["career1","career2","career3"]}}
+For ANYTHING ELSE - objects, people, places, animals, food, products:
+{{"mode":"object","object_name":"exact name","what_it_is":"detailed description","how_it_works":"how it works or functions","where_it_is_used":["use1","use2","use3","use4","use5"],"wiring_guide":null,"field":"field","difficulty_to_learn":"Easy / Moderate / Advanced","fun_fact":"fascinating fact","related_careers":["career1","career2","career3"]}}
 
 IMPORTANT: Return ONLY the JSON. Nothing else."""
 
-        response = client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
-                    {"type": "text", "text": prompt}
-                ]
-            }],
-            max_tokens=2000,
-            temperature=0.1
-        )
+    response = client.chat.completions.create(
+        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+                {"type": "text", "text": prompt}
+            ]
+        }],
+        max_tokens=2000,
+        temperature=0.1
+    )
+    return response.choices[0].message.content.strip()
 
-        raw = response.choices[0].message.content.strip()
+@app.route("/analyse", methods=["POST"])
+def analyse():
+    try:
+        data = request.get_json()
+        image_data = data.get("image", "")
+        if "," in image_data:
+            image_data = image_data.split(",")[1]
+
+        # Step 1 — check knowledge base for image match
+        matched_item = find_matching_kb_item(image_data)
+        if matched_item:
+            # Generate full description using AI based on stored description
+            full_desc = generate_full_description(matched_item["name"], matched_item["description"])
+            if full_desc:
+                return jsonify({
+                    "mode": "object",
+                    "object_name": matched_item["name"],
+                    "what_it_is": full_desc.get("what_it_is", matched_item["description"]),
+                    "how_it_works": full_desc.get("how_it_works", ""),
+                    "where_it_is_used": full_desc.get("where_it_is_used", ["FLOW Bus"]),
+                    "wiring_guide": None,
+                    "field": full_desc.get("field", "Educational Technology"),
+                    "difficulty_to_learn": full_desc.get("difficulty_to_learn", "Moderate"),
+                    "fun_fact": full_desc.get("fun_fact", "Part of the FLOW Bus by EDODWAJA!"),
+                    "related_careers": full_desc.get("related_careers", ["Robotics Engineer", "AI Developer"])
+                })
+            else:
+                return jsonify({
+                    "mode": "object",
+                    "object_name": matched_item["name"],
+                    "what_it_is": matched_item["description"],
+                    "how_it_works": matched_item["description"],
+                    "where_it_is_used": ["FLOW Bus", "Educational demonstrations", "Student learning"],
+                    "wiring_guide": None,
+                    "field": "Educational Technology",
+                    "difficulty_to_learn": "Moderate",
+                    "fun_fact": "Part of the FLOW Bus by EDODWAJA!",
+                    "related_careers": ["Robotics Engineer", "AI Developer"]
+                })
+
+        # Step 2 — no match, analyse normally
+        kb_context = get_kb_context()
+        raw = analyse_with_ai(image_data, kb_context)
         result = clean_and_parse(raw)
 
         if result:
             return jsonify(result)
         else:
-            plain = client.chat.completions.create(
+            plain_response = client.chat.completions.create(
                 model="meta-llama/llama-4-scout-17b-16e-instruct",
                 messages=[{
                     "role": "user",
@@ -213,7 +280,7 @@ IMPORTANT: Return ONLY the JSON. Nothing else."""
                 max_tokens=2000,
                 temperature=0.1
             )
-            plain_text = plain.choices[0].message.content.strip()
+            plain_text = plain_response.choices[0].message.content.strip()
             plain_text = re.sub(r'\*\*|\*|#{1,6} |`{1,3}', '', plain_text)
             return jsonify({"mode": "raw", "content": plain_text})
 
@@ -302,60 +369,15 @@ Always reply ONLY in {language}.
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/admin/items", methods=["GET"])
-def get_items():
-    kb = load_kb()
-    items_without_image = []
-    for item in kb.get("items", []):
-        items_without_image.append({
-            "id": item["id"],
-            "name": item["name"],
-            "description": item["description"],
-            "has_image": bool(item.get("image"))
-        })
-    return jsonify(items_without_image)
+# ── ADMIN ROUTES ──
 
-@app.route("/admin/add", methods=["POST"])
-def add_item():
-    try:
-        data = request.get_json()
-        kb = load_kb()
-        items = kb.get("items", [])
-        new_id = max([i["id"] for i in items], default=0) + 1
-        new_item = {
-            "id": new_id,
-            "name": data.get("name", ""),
-            "description": data.get("description", ""),
-            "image": data.get("image", "")
-        }
-        items.append(new_item)
-        kb["items"] = items
-        save_kb(kb)
-        return jsonify({"success": True, "id": new_id})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/admin/delete/<int:item_id>", methods=["DELETE"])
-def delete_item(item_id):
-    try:
-        kb = load_kb()
-        kb["items"] = [i for i in kb.get("items", []) if i["id"] != item_id]
-        save_kb(kb)
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "flowbus2024")
-
-# Store credentials in memory (persists until Render restarts)
-current_credentials = {"username": None, "password": None}
-
-def get_credentials():
-    return (
-        current_credentials["username"] or os.getenv("ADMIN_USERNAME", "admin"),
-        current_credentials["password"] or os.getenv("ADMIN_PASSWORD", "flowbus2024")
-    )
+@app.route("/admin/login", methods=["POST"])
+def admin_login():
+    data = request.get_json()
+    uname, pwd = get_credentials()
+    if data.get("username") == uname and data.get("password") == pwd:
+        return jsonify({"success": True, "token": "flowbus_admin_token"})
+    return jsonify({"success": False, "message": "Invalid credentials"}), 401
 
 @app.route("/admin/change-credentials", methods=["POST"])
 def change_credentials():
@@ -366,13 +388,45 @@ def change_credentials():
     current_credentials["password"] = data.get("password")
     return jsonify({"success": True})
 
-@app.route("/admin/login", methods=["POST"])
-def admin_login():
-    data = request.get_json()
-    uname, pwd = get_credentials()
-    if data.get("username") == uname and data.get("password") == pwd:
-        return jsonify({"success": True, "token": "flowbus_admin_token"})
-    return jsonify({"success": False, "message": "Invalid credentials"}), 401
+@app.route("/admin/items", methods=["GET"])
+def get_items():
+    items = get_all_kb_items()
+    return jsonify(items)
+
+@app.route("/admin/add", methods=["POST"])
+def add_item():
+    try:
+        data = request.get_json()
+        name = data.get("name", "")
+        description = data.get("description", "")
+        image_b64 = data.get("image", "")
+
+        image_url = None
+        if image_b64:
+            if "," in image_b64:
+                image_b64_clean = image_b64.split(",")[1]
+            else:
+                image_b64_clean = image_b64
+            filename = f"{uuid.uuid4()}.jpg"
+            image_url = upload_image_to_storage(image_b64_clean, filename)
+
+        result = supabase.table("knowledge_base").insert({
+            "name": name,
+            "description": description,
+            "image_url": image_url
+        }).execute()
+
+        return jsonify({"success": True, "id": result.data[0]["id"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/admin/delete/<int:item_id>", methods=["DELETE"])
+def delete_item(item_id):
+    try:
+        supabase.table("knowledge_base").delete().eq("id", item_id).execute()
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/admin", methods=["GET"])
 def admin_panel():
