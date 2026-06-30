@@ -158,10 +158,9 @@ def generate_full_description(name, description):
 Name: {name}
 Description: {description}
 
-Generate a complete educational profile. Return ONLY valid JSON:
+Generate supporting educational fields ONLY - do NOT rewrite the description, use it as context. Return ONLY valid JSON:
 {{
-  "what_it_is": "2-3 sentence expanded description based on the given info",
-  "how_it_works": "explain how it works based on the description, 3-4 sentences",
+  "how_it_works": "explain how this item works, based on the description, 3-4 sentences",
   "where_it_is_used": ["use case 1", "use case 2", "use case 3", "use case 4", "use case 5"],
   "field": "relevant field or domain",
   "difficulty_to_learn": "Easy or Moderate or Advanced",
@@ -238,13 +237,13 @@ def analyse():
         # Step 1 — check knowledge base for image match
         matched_item = find_matching_kb_item(image_data)
         if matched_item:
-            # Generate full description using AI based on stored description
+            # Generate ONLY the supporting fields using AI - keep description exactly as typed
             full_desc = generate_full_description(matched_item["name"], matched_item["description"])
             if full_desc:
                 return jsonify({
                     "mode": "object",
                     "object_name": matched_item["name"],
-                    "what_it_is": full_desc.get("what_it_is", matched_item["description"]),
+                    "what_it_is": matched_item["description"],
                     "how_it_works": full_desc.get("how_it_works", ""),
                     "where_it_is_used": full_desc.get("where_it_is_used", ["FLOW Bus"]),
                     "wiring_guide": None,
