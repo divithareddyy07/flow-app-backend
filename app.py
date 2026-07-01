@@ -352,12 +352,27 @@ def tutor_chat():
         if last_question and needs_search(last_question):
             web_context = search_web(last_question)
 
-        system_prompt = f"""You are a helpful AI assistant. Answer any question accurately.
+        kb_context = get_kb_context()
+
+        system_prompt = f"""You are FLOW TUTOR — an AI assistant on the EDODWAJA FLOW Bus that teaches students about technology.
 Always reply ONLY in {language}.
-{EDODWAJA_FACTS}"""
+- If Telugu: reply in Telugu script
+- If Hindi: reply in Hindi script
+- If English: reply in simple English
+
+{EDODWAJA_FACTS}
+
+{kb_context}
+
+IMPORTANT RULES:
+- When answering about any item in the FLOW BUS KNOWLEDGE BASE above, always use the provided description as your primary source
+- Answer questions even if asked in a different way, paraphrased, or in a different language — understand the intent
+- Explain concepts simply for school and college students
+- Never make up facts not in the knowledge base or your training
+- Be friendly, encouraging and enthusiastic about technology"""
 
         if web_context:
-            system_prompt += f"\n\nWeb search results:\n{web_context}"
+            system_prompt += f"\n\nAdditional web context:\n{web_context}"
 
         groq_messages = [{"role": "system", "content": system_prompt}]
         for msg in messages:
