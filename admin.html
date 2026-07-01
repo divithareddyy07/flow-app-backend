@@ -94,7 +94,7 @@ textarea { height: 120px; resize: vertical; }
 
       <label>Photo</label>
       <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-        <div id="uploadText" style="color:#475569; font-size:14px">📷 Click to upload a reference photo of this item</div>
+        <div id="uploadText" style="color:#475569; font-size:14px">📷 Click to upload a reference photo (optional — needed for FLOW LENS matching)</div>
         <img id="previewImg" class="preview-img" />
       </div>
       <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(event)" />
@@ -173,7 +173,7 @@ async function addItem() {
 
   if (!name) { alert("Please enter a name"); return; }
   if (!description) { alert("Please enter a description"); return; }
-  if (!imageBase64) { alert("Please upload a photo"); return; }
+  // Photo is optional — skip if not provided
 
   try {
     const res = await fetch(`${API}/admin/add`, {
